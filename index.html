@@ -1,0 +1,825 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Abstract Trim - AI Abstract Length Reducer</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Mammoth.js for Word (.docx) file processing -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
+    <!-- PDF.js for PDF file reading -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
+    <!-- Inter Font -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                    colors: {
+                        brand: {
+                            50: '#f0f7ff',
+                            100: '#e0effe',
+                            500: '#3b82f6',
+                            600: '#2563eb',
+                            700: '#1d4ed8',
+                            900: '#1e3a8a',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        /* Custom scrollbars */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f5f9;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(12px);
+        }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 antialiased min-h-screen flex flex-col font-sans">
+
+    <!-- Header -->
+    <header class="sticky top-0 z-30 bg-white/90 backdrop-blur border-b border-slate-200">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+            <div class="flex items-center space-x-3">
+                <div class="p-2 bg-brand-600 text-white rounded-xl shadow-md shadow-brand-500/20">
+                    <i data-lucide="scissors" class="w-5 h-5"></i>
+                </div>
+                <div>
+                    <h1 class="text-lg font-bold text-slate-900 leading-tight">AbstractTrim</h1>
+                    <p class="text-xs text-slate-500">AI-Powered Academic Abstract Length Reducer</p>
+                </div>
+            </div>
+            
+            <div class="flex items-center space-x-3">
+                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800 border border-emerald-200">
+                    <span class="w-1.5 h-1.5 mr-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                    Gemini 3 Flash Ready
+                </span>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content Grid -->
+    <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+        <!-- Left Panel: Input & Parameters (5 columns) -->
+        <section class="lg:col-span-5 flex flex-col gap-5">
+            
+            <!-- Input Card -->
+            <div class="bg-white rounded-2xl p-5 shadow-sm border border-slate-200 flex flex-col gap-4">
+                <div class="flex items-center justify-between">
+                    <label class="text-sm font-semibold text-slate-800 flex items-center gap-2">
+                        <i data-lucide="file-text" class="w-4 h-4 text-brand-600"></i>
+                        Source Abstract
+                    </label>
+                    <div class="flex gap-1 bg-slate-100 p-1 rounded-lg text-xs font-medium text-slate-600" id="inputTabs">
+                        <button id="tabPaste" onclick="switchInputTab('paste')" class="px-3 py-1 rounded-md bg-white shadow-xs text-slate-900 font-semibold transition">Paste Text</button>
+                        <button id="tabUpload" onclick="switchInputTab('upload')" class="px-3 py-1 rounded-md hover:text-slate-900 transition">Upload File</button>
+                    </div>
+                </div>
+
+                <!-- Text Area Input Container -->
+                <div id="pasteContainer" class="relative">
+                    <textarea id="abstractInput" rows="10" 
+                        class="w-full p-3.5 text-sm text-slate-800 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-brand-500 focus:border-brand-500 focus:bg-white transition resize-none leading-relaxed placeholder-slate-400"
+                        placeholder="Paste your original abstract here... (e.g. background, objective, methods, results, and conclusion)"></textarea>
+                    
+                    <div class="mt-2 flex items-center justify-between text-xs text-slate-500">
+                        <div class="flex items-center gap-3">
+                            <span id="origWordCount" class="font-medium text-slate-700">0 words</span>
+                            <span>•</span>
+                            <span id="origCharCount">0 characters</span>
+                        </div>
+                        <button onclick="clearInput()" class="text-slate-400 hover:text-rose-600 transition flex items-center gap-1">
+                            <i data-lucide="trash-2" class="w-3.5 h-3.5"></i> Clear
+                        </button>
+                    </div>
+                </div>
+
+                <!-- File Upload Container -->
+                <div id="uploadContainer" class="hidden flex flex-col gap-3">
+                    <div id="dropZone" class="border-2 border-dashed border-slate-300 rounded-xl p-6 flex flex-col items-center justify-center bg-slate-50 hover:bg-brand-50/50 hover:border-brand-400 transition cursor-pointer text-center group">
+                        <input type="file" id="fileInput" accept=".docx, .pdf, .txt" class="hidden" onchange="handleFileSelect(event)">
+                        <div class="p-3 bg-white rounded-full shadow-xs group-hover:scale-110 transition-transform mb-2">
+                            <i data-lucide="upload-cloud" class="w-6 h-6 text-brand-600"></i>
+                        </div>
+                        <p class="text-sm font-medium text-slate-700">Click to upload or drag & drop</p>
+                        <p class="text-xs text-slate-400 mt-1">Supports Word (.docx), PDF (.pdf), or Plain Text (.txt)</p>
+                    </div>
+                    
+                    <div id="fileInfo" class="hidden p-3 bg-brand-50 border border-brand-200 rounded-xl flex items-center justify-between">
+                        <div class="flex items-center gap-2 overflow-hidden">
+                            <i data-lucide="file-check" class="w-4 h-4 text-brand-600 shrink-0"></i>
+                            <span id="fileName" class="text-xs font-semibold text-brand-900 truncate">document.docx</span>
+                        </div>
+                        <button onclick="removeUploadedFile()" class="text-slate-400 hover:text-rose-600 transition">
+                            <i data-lucide="x" class="w-4 h-4"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Configuration Options Card -->
+            <div class="bg-white rounded-2xl p-5 shadow-sm border border-slate-200 flex flex-col gap-5">
+                <h2 class="text-sm font-semibold text-slate-900 flex items-center gap-2">
+                    <i data-lucide="sliders" class="w-4 h-4 text-brand-600"></i>
+                    Reduction Parameters
+                </h2>
+
+                <!-- 1. Type of Abstract -->
+                <div>
+                    <label class="block text-xs font-medium text-slate-700 mb-2">Abstract Type & Discipline</label>
+                    <select id="abstractType" class="w-full text-sm bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-slate-800 focus:ring-2 focus:ring-brand-500 focus:border-brand-500 font-medium">
+                        <option value="scientific">Scientific / Medical (Structured: Background, Methods, Results, Conclusion)</option>
+                        <option value="conference">Conference Submission (Strict word cap, concise & high impact)</option>
+                        <option value="humanities">Humanities & Social Sciences (Thesis, methodology & context heavy)</option>
+                        <option value="executive">Executive / Policy Summary (Key implications & decisions)</option>
+                        <option value="general">General Academic Abstract</option>
+                    </select>
+                </div>
+
+                <!-- 2. Target Word Count -->
+                <div>
+                    <div class="flex justify-between items-center mb-2">
+                        <label class="text-xs font-medium text-slate-700">Target Word Count</label>
+                        <span id="targetWordBadge" class="text-xs font-bold text-brand-700 bg-brand-100 px-2 py-0.5 rounded-full">150 Words</span>
+                    </div>
+
+                    <!-- Preset Pills -->
+                    <div class="grid grid-cols-4 gap-2 mb-3">
+                        <button onclick="setPresetWords(100)" class="preset-btn px-2 py-1.5 text-xs font-medium bg-slate-100 hover:bg-brand-50 border border-slate-200 hover:border-brand-300 rounded-lg text-slate-700 transition">100 w</button>
+                        <button onclick="setPresetWords(150)" class="preset-btn active px-2 py-1.5 text-xs font-medium bg-brand-600 border border-brand-600 rounded-lg text-white transition shadow-xs">150 w</button>
+                        <button onclick="setPresetWords(200)" class="preset-btn px-2 py-1.5 text-xs font-medium bg-slate-100 hover:bg-brand-50 border border-slate-200 hover:border-brand-300 rounded-lg text-slate-700 transition">200 w</button>
+                        <button onclick="setPresetWords(250)" class="preset-btn px-2 py-1.5 text-xs font-medium bg-slate-100 hover:bg-brand-50 border border-slate-200 hover:border-brand-300 rounded-lg text-slate-700 transition">250 w</button>
+                    </div>
+
+                    <!-- Range Slider & Manual Input -->
+                    <div class="flex items-center gap-3">
+                        <input type="range" id="wordSlider" min="50" max="500" step="5" value="150" 
+                            oninput="updateTargetWords(this.value)"
+                            class="flex-1 h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-brand-600">
+                        <input type="number" id="wordInput" min="30" max="1000" value="150" 
+                            oninput="updateTargetWords(this.value)"
+                            class="w-20 p-1.5 text-center text-xs border border-slate-200 rounded-lg font-bold text-slate-800 bg-slate-50 focus:ring-brand-500 focus:border-brand-500">
+                    </div>
+                </div>
+
+                <!-- 3. Advanced Toggles -->
+                <div class="pt-2 border-t border-slate-100 space-y-2.5">
+                    <label class="flex items-center justify-between cursor-pointer">
+                        <span class="text-xs text-slate-700 font-medium">Preserve Exact Numbers & Data</span>
+                        <input type="checkbox" id="togglePreserveData" checked class="w-4 h-4 text-brand-600 rounded focus:ring-brand-500 border-slate-300">
+                    </label>
+                    <label class="flex items-center justify-between cursor-pointer">
+                        <span class="text-xs text-slate-700 font-medium">Maintain Structured Subheadings (if present)</span>
+                        <input type="checkbox" id="toggleHeadings" checked class="w-4 h-4 text-brand-600 rounded focus:ring-brand-500 border-slate-300">
+                    </label>
+                    <label class="flex items-center justify-between cursor-pointer">
+                        <span class="text-xs text-slate-700 font-medium">Prioritize Active Academic Voice</span>
+                        <input type="checkbox" id="toggleActiveVoice" checked class="w-4 h-4 text-brand-600 rounded focus:ring-brand-500 border-slate-300">
+                    </label>
+                </div>
+
+                <!-- Process Action Button -->
+                <button id="btnReduce" onclick="processReduction()" 
+                    class="w-full py-3 px-4 bg-brand-600 hover:bg-brand-700 active:scale-[0.99] text-white font-semibold text-sm rounded-xl shadow-lg shadow-brand-600/30 flex items-center justify-center gap-2 transition duration-150">
+                    <i data-lucide="sparkles" class="w-4 h-4"></i>
+                    <span>Compress & Refine Abstract</span>
+                </button>
+            </div>
+        </section>
+
+        <!-- Right Panel: Results & Comparison (7 columns) -->
+        <section class="lg:col-span-7 flex flex-col gap-5">
+            
+            <div class="bg-white rounded-2xl p-5 shadow-sm border border-slate-200 flex-1 flex flex-col">
+                
+                <!-- Output Header & Tab Controls -->
+                <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between pb-4 border-b border-slate-100 gap-3">
+                    <div>
+                        <h2 class="text-sm font-semibold text-slate-900 flex items-center gap-2">
+                            <i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-600"></i>
+                            Condensed Abstract Output
+                        </h2>
+                        <p class="text-xs text-slate-500 mt-0.5">Optimized to retain key scientific claims and rigor.</p>
+                    </div>
+
+                    <!-- Output Display Mode Tabs -->
+                    <div class="flex bg-slate-100 p-1 rounded-lg text-xs font-medium text-slate-600">
+                        <button id="outTabResult" onclick="switchOutputTab('result')" class="px-3 py-1 rounded-md bg-white shadow-xs text-slate-900 font-semibold transition">Reduced Text</button>
+                        <button id="outTabDiff" onclick="switchOutputTab('diff')" class="px-3 py-1 rounded-md hover:text-slate-900 transition">Side-by-Side</button>
+                        <button id="outTabPoints" onclick="switchOutputTab('points')" class="px-3 py-1 rounded-md hover:text-slate-900 transition">Retained Points</button>
+                    </div>
+                </div>
+
+                <!-- Dynamic Metrics Bar -->
+                <div id="metricsBar" class="my-4 grid grid-cols-3 gap-3 p-3 bg-slate-50 rounded-xl border border-slate-100 text-center">
+                    <div>
+                        <div class="text-xs text-slate-500 font-medium">New Word Count</div>
+                        <div id="metricWords" class="text-lg font-bold text-slate-900">--</div>
+                    </div>
+                    <div>
+                        <div class="text-xs text-slate-500 font-medium">Reduction Rate</div>
+                        <div id="metricReduction" class="text-lg font-bold text-emerald-600">--</div>
+                    </div>
+                    <div>
+                        <div class="text-xs text-slate-500 font-medium">Est. Read Time</div>
+                        <div id="metricReadTime" class="text-lg font-bold text-brand-600">--</div>
+                    </div>
+                </div>
+
+                <!-- Main Output Card Area -->
+                <div class="flex-1 relative min-h-[320px] flex flex-col">
+                    
+                    <!-- Loading Placeholder Overlay -->
+                    <div id="loadingOverlay" class="hidden absolute inset-0 bg-white/90 backdrop-blur-xs rounded-xl flex flex-col items-center justify-center z-20 space-y-3">
+                        <div class="w-10 h-10 border-4 border-brand-200 border-t-brand-600 rounded-full animate-spin"></div>
+                        <p id="loadingStatusText" class="text-xs font-semibold text-slate-700">Analyzing abstract structure & applying AI compression...</p>
+                    </div>
+
+                    <!-- Empty State Placeholder -->
+                    <div id="emptyState" class="flex-1 flex flex-col items-center justify-center p-8 text-center my-auto">
+                        <div class="w-12 h-12 rounded-full bg-slate-100 text-slate-400 flex items-center justify-center mb-3">
+                            <i data-lucide="file-type-2" class="w-6 h-6"></i>
+                        </div>
+                        <h3 class="text-sm font-semibold text-slate-700">No Reduced Abstract Yet</h3>
+                        <p class="text-xs text-slate-400 max-w-sm mt-1">
+                            Enter or upload your abstract on the left, set your target length, and click "Compress & Refine Abstract".
+                        </p>
+                    </div>
+
+                    <!-- View 1: Reduced Text Output -->
+                    <div id="viewResult" class="hidden flex-1 flex flex-col">
+                        <div id="outputContainer" class="flex-1 p-4 bg-slate-50 border border-slate-200 rounded-xl text-sm leading-relaxed text-slate-800 whitespace-pre-line font-sans overflow-y-auto max-h-[420px]">
+                        </div>
+                    </div>
+
+                    <!-- View 2: Side-by-Side Comparison -->
+                    <div id="viewDiff" class="hidden flex-1 grid grid-cols-1 md:grid-cols-2 gap-3 max-h-[420px] overflow-y-auto">
+                        <div class="p-3 bg-slate-50 border border-slate-200 rounded-xl flex flex-col">
+                            <span class="text-xs font-bold text-slate-500 mb-2 uppercase tracking-wider">Original Abstract</span>
+                            <p id="diffOriginal" class="text-xs text-slate-600 leading-relaxed whitespace-pre-line overflow-y-auto"></p>
+                        </div>
+                        <div class="p-3 bg-emerald-50/50 border border-emerald-200 rounded-xl flex flex-col">
+                            <span class="text-xs font-bold text-emerald-700 mb-2 uppercase tracking-wider">Condensed Abstract</span>
+                            <p id="diffReduced" class="text-xs text-slate-800 leading-relaxed font-medium whitespace-pre-line overflow-y-auto"></p>
+                        </div>
+                    </div>
+
+                    <!-- View 3: Key Retained Points -->
+                    <div id="viewPoints" class="hidden flex-1 p-4 bg-slate-50 border border-slate-200 rounded-xl overflow-y-auto max-h-[420px]">
+                        <h4 class="text-xs font-semibold text-slate-700 mb-3 uppercase tracking-wider">Key Elements Preserved:</h4>
+                        <ul id="retainedList" class="space-y-2 text-xs text-slate-700">
+                        </ul>
+                    </div>
+
+                </div>
+
+                <!-- Action Toolbar -->
+                <div class="mt-4 pt-4 border-t border-slate-100 flex flex-wrap items-center justify-between gap-3">
+                    <div class="flex items-center gap-2">
+                        <button onclick="copyToClipboard()" id="btnCopy" disabled 
+                            class="px-3.5 py-2 bg-slate-900 hover:bg-slate-800 disabled:bg-slate-200 disabled:text-slate-400 text-white text-xs font-medium rounded-xl flex items-center gap-1.5 transition">
+                            <i data-lucide="copy" class="w-3.5 h-3.5"></i>
+                            <span>Copy Abstract</span>
+                        </button>
+
+                        <button onclick="downloadTextFile()" id="btnDownload" disabled
+                            class="px-3.5 py-2 bg-white hover:bg-slate-50 border border-slate-200 disabled:border-slate-200 disabled:text-slate-300 text-slate-700 text-xs font-medium rounded-xl flex items-center gap-1.5 transition">
+                            <i data-lucide="download" class="w-3.5 h-3.5"></i>
+                            <span>Export (.txt)</span>
+                        </button>
+                    </div>
+
+                    <!-- Fine-tune Adjustments -->
+                    <div class="flex items-center gap-1">
+                        <button onclick="quickTweak('10_percent_shorter')" id="btnShorter" disabled 
+                            class="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 disabled:opacity-40 text-slate-700 text-xs font-medium rounded-lg transition" title="Trim an additional 10%">
+                            -10% Shorter
+                        </button>
+                        <button onclick="quickTweak('more_concise')" id="btnConcise" disabled 
+                            class="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 disabled:opacity-40 text-slate-700 text-xs font-medium rounded-lg transition" title="Increase academic conciseness">
+                            More Concise
+                        </button>
+                    </div>
+                </div>
+
+            </div>
+
+        </section>
+
+    </main>
+
+    <!-- Toast Notification -->
+    <div id="toast" class="fixed bottom-5 right-5 transform translate-y-20 opacity-0 transition-all duration-300 z-50 bg-slate-900 text-white px-4 py-3 rounded-xl shadow-xl flex items-center gap-3 text-xs font-medium">
+        <i data-lucide="info" id="toastIcon" class="w-4 h-4 text-brand-400"></i>
+        <span id="toastMessage">Notification message</span>
+    </div>
+
+    <script>
+        // State Management
+        let appState = {
+            inputMode: 'paste', // 'paste' or 'upload'
+            uploadedText: '',
+            reducedText: '',
+            originalText: '',
+            keyPoints: [],
+            targetWords: 150,
+            abstractType: 'scientific'
+        };
+
+        // Initialize PDF.js worker
+        if (window.pdfjsLib) {
+            pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
+        }
+
+        // DOM Elements
+        const abstractInput = document.getElementById('abstractInput');
+        const origWordCount = document.getElementById('origWordCount');
+        const origCharCount = document.getElementById('origCharCount');
+        const wordSlider = document.getElementById('wordSlider');
+        const wordInput = document.getElementById('wordInput');
+        const targetWordBadge = document.getElementById('targetWordBadge');
+
+        // Initialize Lucide Icons
+        lucide.createIcons();
+
+        // Listen for live character/word count in paste area
+        abstractInput.addEventListener('input', updateInputMetrics);
+
+        function updateInputMetrics() {
+            const text = getInputText();
+            const words = countWords(text);
+            const chars = text.length;
+
+            origWordCount.textContent = `${words} word${words === 1 ? '' : 's'}`;
+            origCharCount.textContent = `${chars} char${chars === 1 ? '' : 's'}`;
+
+            // Adjust slider maximum if original text is longer
+            if (words > 100) {
+                wordSlider.max = Math.min(words, 800);
+            }
+        }
+
+        function getInputText() {
+            if (appState.inputMode === 'paste') {
+                return abstractInput.value.trim();
+            } else {
+                return appState.uploadedText.trim();
+            }
+        }
+
+        function countWords(str) {
+            if (!str) return 0;
+            return str.trim().split(/\s+/).filter(word => word.length > 0).length;
+        }
+
+        // Tab Switching for Input
+        function switchInputTab(tab) {
+            appState.inputMode = tab;
+            const btnPaste = document.getElementById('tabPaste');
+            const btnUpload = document.getElementById('tabUpload');
+            const pasteCont = document.getElementById('pasteContainer');
+            const uploadCont = document.getElementById('uploadContainer');
+
+            if (tab === 'paste') {
+                btnPaste.className = 'px-3 py-1 rounded-md bg-white shadow-xs text-slate-900 font-semibold transition';
+                btnUpload.className = 'px-3 py-1 rounded-md hover:text-slate-900 transition text-slate-600';
+                pasteCont.classList.remove('hidden');
+                uploadCont.classList.add('hidden');
+            } else {
+                btnUpload.className = 'px-3 py-1 rounded-md bg-white shadow-xs text-slate-900 font-semibold transition';
+                btnPaste.className = 'px-3 py-1 rounded-md hover:text-slate-900 transition text-slate-600';
+                uploadCont.classList.remove('hidden');
+                pasteCont.classList.add('hidden');
+            }
+            updateInputMetrics();
+        }
+
+        // Target Word Count Controllers
+        function setPresetWords(val) {
+            updateTargetWords(val);
+            document.querySelectorAll('.preset-btn').forEach(btn => {
+                if (parseInt(btn.textContent) === parseInt(val)) {
+                    btn.className = 'preset-btn active px-2 py-1.5 text-xs font-medium bg-brand-600 border border-brand-600 rounded-lg text-white transition shadow-xs';
+                } else {
+                    btn.className = 'preset-btn px-2 py-1.5 text-xs font-medium bg-slate-100 hover:bg-brand-50 border border-slate-200 hover:border-brand-300 rounded-lg text-slate-700 transition';
+                }
+            });
+        }
+
+        function updateTargetWords(val) {
+            const num = Math.max(30, Math.min(1000, parseInt(val) || 150));
+            appState.targetWords = num;
+            wordSlider.value = num;
+            wordInput.value = num;
+            targetWordBadge.textContent = `${num} Words`;
+        }
+
+        function clearInput() {
+            abstractInput.value = '';
+            appState.uploadedText = '';
+            removeUploadedFile();
+            updateInputMetrics();
+        }
+
+        // Drag & Drop / File Handling
+        const dropZone = document.getElementById('dropZone');
+        
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropZone.classList.add('border-brand-500', 'bg-brand-50');
+        });
+
+        dropZone.addEventListener('dragleave', () => {
+            dropZone.classList.remove('border-brand-500', 'bg-brand-50');
+        });
+
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('border-brand-500', 'bg-brand-50');
+            if (e.dataTransfer.files.length > 0) {
+                processFile(e.dataTransfer.files[0]);
+            }
+        });
+
+        dropZone.addEventListener('click', () => {
+            document.getElementById('fileInput').click();
+        });
+
+        function handleFileSelect(event) {
+            if (event.target.files.length > 0) {
+                processFile(event.target.files[0]);
+            }
+        }
+
+        async function processFile(file) {
+            const ext = file.name.split('.').pop().toLowerCase();
+            showToast(`Reading ${file.name}...`, 'info');
+
+            try {
+                if (ext === 'txt') {
+                    const text = await file.text();
+                    setUploadedText(file.name, text);
+                } else if (ext === 'docx') {
+                    const arrayBuffer = await file.arrayBuffer();
+                    const result = await mammoth.extractRawText({ arrayBuffer: arrayBuffer });
+                    setUploadedText(file.name, result.value);
+                } else if (ext === 'pdf') {
+                    const arrayBuffer = await file.arrayBuffer();
+                    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+                    let fullText = '';
+                    for (let i = 1; i <= pdf.numPages; i++) {
+                        const page = await pdf.getPage(i);
+                        const textContent = await page.getTextContent();
+                        const pageText = textContent.items.map(item => item.str).join(' ');
+                        fullText += pageText + '\n';
+                    }
+                    setUploadedText(file.name, fullText);
+                } else {
+                    showToast('Unsupported file type. Please upload .docx, .pdf, or .txt', 'error');
+                }
+            } catch (err) {
+                console.error("File processing error:", err);
+                showToast('Failed to extract text from file.', 'error');
+            }
+        }
+
+        function setUploadedText(fileName, text) {
+            appState.uploadedText = text;
+            document.getElementById('fileName').textContent = fileName;
+            document.getElementById('fileInfo').classList.remove('hidden');
+            abstractInput.value = text; // Sync with paste textarea for convenience
+            updateInputMetrics();
+            showToast(`Extracted ${countWords(text)} words from ${fileName}`, 'success');
+        }
+
+        function removeUploadedFile() {
+            appState.uploadedText = '';
+            document.getElementById('fileInput').value = '';
+            document.getElementById('fileInfo').classList.add('hidden');
+            updateInputMetrics();
+        }
+
+        // Gemini API Execution
+        async function processReduction() {
+            const text = getInputText();
+            const wordCount = countWords(text);
+
+            if (wordCount < 20) {
+                showToast('Please provide a longer abstract (at least 20 words).', 'warning');
+                return;
+            }
+
+            appState.originalText = text;
+            appState.abstractType = document.getElementById('abstractType').value;
+
+            // UI Loading state
+            showLoading(true, "Analyzing abstract structure and distilling key scientific content...");
+
+            const preserveData = document.getElementById('togglePreserveData').checked;
+            const keepHeadings = document.getElementById('toggleHeadings').checked;
+            const activeVoice = document.getElementById('toggleActiveVoice').checked;
+
+            const systemPrompt = `You are a world-class academic editor and scientific publication expert. 
+Your task is to compress and reduce the length of an academic abstract to approximately ${appState.targetWords} words, while rigorously preserving core objectives, methodology, main findings, statistical data, and conclusion.
+
+Follow these strict guidelines:
+1. Target Word Limit: Strict max around ${appState.targetWords} words.
+2. Abstract Type Focus (${appState.abstractType}):
+   - Scientific/Medical: Maintain IMRaD context (Background, Objective, Method, Result, Conclusion).
+   - Conference: Make it concise, high-impact, and immediately engaging.
+   - Humanities/Social Science: Preserve qualitative nuances and theoretical frameworks.
+3. Formatting Rules:
+   - ${preserveData ? "DO NOT omit specific metrics, p-values, sample sizes, percentages, or empirical data." : "Retain key quantitative findings where possible."}
+   - ${keepHeadings ? "If subheadings (e.g. Background, Methods) are present, retain them cleanly." : "Present as a cohesive paragraph without explicit subheadings."}
+   - ${activeVoice ? "Use clear, concise active academic voice." : "Maintain the original tone."}
+
+Provide output strictly formatted as JSON using the following schema:
+{
+  "condensedAbstract": "The full compressed abstract text...",
+  "retainedPoints": [
+    "Key finding or metric 1 retained",
+    "Core methodology preserved",
+    "Primary conclusion"
+  ]
+}`;
+
+            const userPrompt = `Here is the original abstract to reduce:\n\n${text}`;
+
+            const apiKey = ""; // Canvas handles API Key insertion at runtime
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKey}`;
+
+            const payload = {
+                contents: [{ parts: [{ text: userPrompt }] }],
+                systemInstruction: { parts: [{ text: systemPrompt }] },
+                generationConfig: {
+                    responseMimeType: "application/json"
+                }
+            };
+
+            try {
+                const response = await fetchWithRetry(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                const result = await response.json();
+                const jsonText = result?.candidates?.[0]?.content?.parts?.[0]?.text;
+
+                if (!jsonText) {
+                    throw new Error("Invalid response received from Gemini model.");
+                }
+
+                const parsed = JSON.parse(jsonText);
+                appState.reducedText = parsed.condensedAbstract || "";
+                appState.keyPoints = parsed.retainedPoints || [];
+
+                renderResults();
+                showToast('Abstract successfully condensed!', 'success');
+
+            } catch (err) {
+                console.error("API Call Error:", err);
+                showToast('Failed to process abstract. Please try again.', 'error');
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        // Exponential backoff fetch wrapper
+        async function fetchWithRetry(url, options, retries = 3, delay = 1000) {
+            try {
+                const response = await fetch(url, options);
+                if (!response.ok) {
+                    if (response.status === 429 && retries > 0) {
+                        await new Promise(res => setTimeout(res, delay));
+                        return fetchWithRetry(url, options, retries - 1, delay * 2);
+                    }
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                return response;
+            } catch (error) {
+                if (retries > 0) {
+                    await new Promise(res => setTimeout(res, delay));
+                    return fetchWithRetry(url, options, retries - 1, delay * 2);
+                }
+                throw error;
+            }
+        }
+
+        // Quick Tweaks (Fine tuning)
+        async function quickTweak(action) {
+            if (!appState.reducedText) return;
+
+            showLoading(true, "Refining condensed abstract...");
+
+            let promptInstruction = "";
+            if (action === '10_percent_shorter') {
+                promptInstruction = "Trim approximately 10% more words while maintaining full academic sense.";
+            } else if (action === 'more_concise') {
+                promptInstruction = "Make the prose more concise, removing filler words and strengthening passive verbs into active academic phrasing.";
+            }
+
+            const systemPrompt = `You are an academic editor. Refine the following abstract based on this request: ${promptInstruction}. Return JSON: { "condensedAbstract": "...", "retainedPoints": [...] }`;
+            const payload = {
+                contents: [{ parts: [{ text: appState.reducedText }] }],
+                systemInstruction: { parts: [{ text: systemPrompt }] },
+                generationConfig: { responseMimeType: "application/json" }
+            };
+
+            const apiKey = "";
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKey}`;
+
+            try {
+                const response = await fetchWithRetry(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const result = await response.json();
+                const parsed = JSON.parse(result.candidates[0].content.parts[0].text);
+                appState.reducedText = parsed.condensedAbstract;
+                if (parsed.retainedPoints) appState.keyPoints = parsed.retainedPoints;
+                
+                renderResults();
+                showToast('Refinement applied!', 'success');
+            } catch (err) {
+                showToast('Refinement failed.', 'error');
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        // Render Results to UI
+        function renderResults() {
+            document.getElementById('emptyState').classList.add('hidden');
+            
+            const origWords = countWords(appState.originalText);
+            const newWords = countWords(appState.reducedText);
+            const reductionPercent = origWords > 0 ? Math.round(((origWords - newWords) / origWords) * 100) : 0;
+            const readTimeMinutes = Math.max(1, Math.ceil(newWords / 200));
+
+            // Metrics Update
+            document.getElementById('metricWords').textContent = `${newWords} words`;
+            document.getElementById('metricReduction').textContent = `-${reductionPercent}%`;
+            document.getElementById('metricReadTime').textContent = `~${readTimeMinutes} min`;
+
+            // Text Views
+            document.getElementById('outputContainer').textContent = appState.reducedText;
+            document.getElementById('diffOriginal').textContent = appState.originalText;
+            document.getElementById('diffReduced').textContent = appState.reducedText;
+
+            // Retained Points
+            const listEl = document.getElementById('retainedList');
+            listEl.innerHTML = '';
+            if (appState.keyPoints && appState.keyPoints.length > 0) {
+                appState.keyPoints.forEach(pt => {
+                    const li = document.createElement('li');
+                    li.className = 'flex items-start gap-2 bg-white p-2.5 rounded-lg border border-slate-200 shadow-2xs';
+                    li.innerHTML = `<i data-lucide="check" class="w-4 h-4 text-emerald-600 shrink-0 mt-0.5"></i><span>${pt}</span>`;
+                    listEl.appendChild(li);
+                });
+            } else {
+                listEl.innerHTML = '<li class="text-slate-400">Main scientific claims conserved.</li>';
+            }
+            lucide.createIcons();
+
+            // Enable buttons
+            document.getElementById('btnCopy').disabled = false;
+            document.getElementById('btnDownload').disabled = false;
+            document.getElementById('btnShorter').disabled = false;
+            document.getElementById('btnConcise').disabled = false;
+
+            // Ensure output tab is visible
+            switchOutputTab('result');
+        }
+
+        // Output Tab Switching
+        function switchOutputTab(tab) {
+            const btnRes = document.getElementById('outTabResult');
+            const btnDiff = document.getElementById('outTabDiff');
+            const btnPts = document.getElementById('outTabPoints');
+
+            const viewRes = document.getElementById('viewResult');
+            const viewDiff = document.getElementById('viewDiff');
+            const viewPts = document.getElementById('viewPoints');
+
+            // Reset active states
+            [btnRes, btnDiff, btnPts].forEach(b => b.className = 'px-3 py-1 rounded-md hover:text-slate-900 transition text-slate-600');
+            [viewRes, viewDiff, viewPts].forEach(v => v.classList.add('hidden'));
+
+            if (tab === 'result') {
+                btnRes.className = 'px-3 py-1 rounded-md bg-white shadow-xs text-slate-900 font-semibold transition';
+                viewRes.classList.remove('hidden');
+            } else if (tab === 'diff') {
+                btnDiff.className = 'px-3 py-1 rounded-md bg-white shadow-xs text-slate-900 font-semibold transition';
+                viewDiff.classList.remove('hidden');
+            } else if (tab === 'points') {
+                btnPts.className = 'px-3 py-1 rounded-md bg-white shadow-xs text-slate-900 font-semibold transition';
+                viewPts.classList.remove('hidden');
+            }
+        }
+
+        // Loading Overlay Helper
+        function showLoading(show, text = "") {
+            const overlay = document.getElementById('loadingOverlay');
+            if (show) {
+                if (text) document.getElementById('loadingStatusText').textContent = text;
+                overlay.classList.remove('hidden');
+            } else {
+                overlay.classList.add('hidden');
+            }
+        }
+
+        // Clipboard Copy Helper
+        function copyToClipboard() {
+            if (!appState.reducedText) return;
+            
+            const textarea = document.createElement('textarea');
+            textarea.value = appState.reducedText;
+            document.body.appendChild(textarea);
+            textarea.select();
+            
+            try {
+                document.execCommand('copy');
+                showToast('Copied reduced abstract to clipboard!', 'success');
+            } catch (err) {
+                showToast('Failed to copy text.', 'error');
+            } finally {
+                document.body.removeChild(textarea);
+            }
+        }
+
+        // Download Text File Helper
+        function downloadTextFile() {
+            if (!appState.reducedText) return;
+
+            const blob = new Blob([appState.reducedText], { type: 'text/plain;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `Condensed_Abstract_${appState.targetWords}words.txt`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+
+            showToast('Downloaded text file.', 'success');
+        }
+
+        // Toast Notification Function
+        function showToast(message, type = 'info') {
+            const toast = document.getElementById('toast');
+            const msgEl = document.getElementById('toastMessage');
+            const icon = document.getElementById('toastIcon');
+
+            msgEl.textContent = message;
+
+            if (type === 'error') {
+                icon.setAttribute('data-lucide', 'alert-circle');
+                icon.className = 'w-4 h-4 text-rose-400';
+            } else if (type === 'success') {
+                icon.setAttribute('data-lucide', 'check-circle-2');
+                icon.className = 'w-4 h-4 text-emerald-400';
+            } else if (type === 'warning') {
+                icon.setAttribute('data-lucide', 'alert-triangle');
+                icon.className = 'w-4 h-4 text-amber-400';
+            } else {
+                icon.setAttribute('data-lucide', 'info');
+                icon.className = 'w-4 h-4 text-brand-400';
+            }
+            lucide.createIcons();
+
+            toast.classList.remove('translate-y-20', 'opacity-0');
+            
+            setTimeout(() => {
+                toast.classList.add('translate-y-20', 'opacity-0');
+            }, 3500);
+        }
+    </script>
+</body>
+</html>
